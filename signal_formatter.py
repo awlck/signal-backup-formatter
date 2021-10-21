@@ -1,3 +1,4 @@
+import datetime
 import pathlib
 import sqlite3
 import sys
@@ -22,12 +23,14 @@ def prepare_output(target: pathlib.Path):
     target.mkdir(parents=True, exist_ok=True)
     with open(target/'style.css', 'w') as f:
         f.write("""
+/* Heavily inspired by: https://codepen.io/samuelkraft/pen/Farhl */
 :root {
   --send-bg: #0B93F6;
   --send-color: white;
   --receive-bg: #E5E5EA;
   --receive-text: black;
   --page-background: white;
+  --info-text: #777;
 }
 
 body {
@@ -41,8 +44,8 @@ body {
   background-color: var(--page-background);
 }
 
-p {
-  max-width: 255px;
+div {
+  max-width: 305px;
   word-wrap: break-word;
   margin-bottom: 12px;
   line-height: 24px;
@@ -51,7 +54,7 @@ p {
   border-radius: 25px;
 }
 
-p:before, p:after {
+div::before, div::after {
   content: "";
   position: absolute;
   bottom: 0;
@@ -63,13 +66,13 @@ p:before, p:after {
   background: var(--send-bg);
   align-self: flex-end;
 }
-.send:before {
+.send::before {
   right: -7px;
   width: 20px;
   background-color: var(--send-bg);
   border-bottom-left-radius: 16px 14px;
 }
-.send:after {
+.send::after {
   right: -26px;
   width: 26px;
   background-color: var(--page-background);
@@ -81,28 +84,55 @@ p:before, p:after {
   color: black;
   align-self: flex-start;
 }
-.receive:before {
+.receive::before {
   left: -7px;
   width: 20px;
   background-color: var(--receive-bg);
   border-bottom-right-radius: 16px 14px;
 }
-.receive:after {
+.receive::after {
   left: -26px;
   width: 26px;
   background-color: var(--page-background);
   border-bottom-right-radius: 10px;
 }
 
-p.sender {
+.sender {
   font-size: small;
   margin-top: 0px;
+  margin-bottom: 0px;
   padding-top: 2px;
-  padding-bottom: 0px;
-  margin-bottom: -18px;
+  padding-bottom: 1px;
+  padding-left: 10px;
   bottom: 0px;
-  color: #777;
+  color: var(--info-text);
   font-weight: bold;
+}
+  
+p.sent {
+  font-size: x-small;
+  line-height: 0px;
+  font-weight: bold;
+}
+.receive>p.sent {
+  text-align: right;
+  margin-right: -5px;
+  color: #555555;
+}
+.send>p.sent {
+  margin-left: -5px;
+  color: #eaeaea;
+}
+
+.date {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  margin-bottom: 0px;
+  padding-bottom: 0px;
+  font-size: small;
+  font-weight: bold;
+  color: var(--info-text);
 }
 """)
 
@@ -140,7 +170,7 @@ class Message:
             result = ""
             if senders is not None and self.sender is not None:
                 result = f"""<p class="sender">{senders[self.sender]}</p>"""
-            result += f"""<p class="{'send' if self.sender is None else 'receive'}">{self.body.replace(chr(10), '<br>')}</p>"""
+            result += f"""<div class="{'send' if self.sender is None else 'receive'}">{self.body.replace(chr(10), '<br/>')}<p class="sent">{datetime.datetime.fromtimestamp(self.date/1000).strftime("%H:%M")}</p></div>"""
             return result
 
 
@@ -177,7 +207,7 @@ class MMS(Message):
                 sendinfo = f'<p class="sender">{senders[self.sender]}</p>'
             else:
                 sendinfo = ''
-            return f"""{sendinfo}<p class="{'send' if self.sender is None else 'receive'}">{content}</p>"""
+            return f"""{sendinfo}<div class="{'send' if self.sender is None else 'receive'}">{content}<p class="sent">{datetime.datetime.fromtimestamp(self.date/1000).strftime("%H:%M")}</p></div>"""
         return ""
 
 
@@ -193,9 +223,14 @@ def format_indiv_thread(cursor: sqlite3.Cursor, thread, src: pathlib.Path, targe
     if not msgs:
         # no results, this thread is empty
         return False
+    last_date_written = datetime.date(1970, 1, 1)
     with open(target/f'{thread[0]}.html', 'w', encoding='utf-8') as f:
         write_prelude(f, thread[4])
         for msg in msgs:
+            msg_date = datetime.datetime.fromtimestamp(msg.date/1000).date()
+            if msg_date != last_date_written:
+                f.write(f'<div class="date">{msg_date}</div>')
+                last_date_written = msg_date
             if isinstance(msg, SMS) and msg.body is not None:
                 f.write(msg.to_html())
             elif isinstance(msg, MMS):
@@ -209,9 +244,14 @@ def format_group_thread(cursor: sqlite3.Cursor, thread, recips, src: pathlib.Pat
     if not msgs:
         # no results, this thread is empty
         return False
+    last_date_written = datetime.date(1970, 1, 1)
     with open(target/f'{thread[0]}.html', 'w', encoding='utf-8') as f:
         write_prelude(f, thread[3])
         for msg in msgs:
+            msg_date = datetime.datetime.fromtimestamp(msg.date / 1000).date()
+            if msg_date != last_date_written:
+                f.write(f'<div class="date">{msg_date.strftime("%Y-%m-%d")}</div>')
+                last_date_written = msg_date
             if isinstance(msg, SMS) and msg.body is not None:
                 f.write(msg.to_html(recips))
             elif isinstance(msg, MMS):
