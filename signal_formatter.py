@@ -1,3 +1,28 @@
+#!/usr/bin/env python3
+"""Format the contents of a Signal backup as HTML."""
+
+__author__ = "Adrian Welcker"
+__version__ = "0.1"
+__license__ = """Copyright 2021 Adrian Welcker
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE."""
+
 import datetime
 import pathlib
 import sqlite3
@@ -20,6 +45,7 @@ MIME_EXT = {
 
 
 def prepare_output(target: pathlib.Path):
+    """Create target directory and write stylesheet."""
     target.mkdir(parents=True, exist_ok=True)
     with open(target/'style.css', 'w') as f:
         f.write("""
@@ -138,6 +164,7 @@ p.sent {
 
 
 def write_prelude(target: typing.TextIO, name: str):
+    """Write the prelude of a particular thread file."""
     target.write(f"""
 <!DOCTYPE html>
 <html>
@@ -180,6 +207,11 @@ class SMS(Message):
 
 class MMS(Message):
     def mms_to_html(self, src, target, cursor, senders=None):
+        """Render this message as HTML.
+
+        Produces HTML code to display this message. Also copies attachments
+        as necessary.
+        """
         content = ""
         cursor.execute('select _id as id, ct, file_name, unique_id from part where mid = ?', (self.id,))
         atts = cursor.fetchall()
@@ -261,6 +293,7 @@ def format_group_thread(cursor: sqlite3.Cursor, thread, recips, src: pathlib.Pat
 
 
 def load_messages(cursor, thread):
+    """Load text and multimedia messages for a particular thread from the DB"""
     sms: list[Message] = [SMS(*m) for m in cursor.execute(
         'select _id, date, NULL, body from sms where thread_id = ? and protocol is NULL union select _id, date, address, body from sms where thread_id = ? and protocol is not null',
         (thread[0], thread[0]))]
